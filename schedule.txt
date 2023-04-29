@@ -1,0 +1,3 @@
+schtasks /create /sc minute /mo 5 /tn "epic2sectra" ^
+/tr "java.exe -jar c:\epic2sectra\epic2sectra.jar -z c:\epic2sectra\epic2sectra.properties" ^
+/ru {username} /rp {password}
