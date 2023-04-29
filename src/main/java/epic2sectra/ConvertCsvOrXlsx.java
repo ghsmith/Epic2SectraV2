@@ -163,10 +163,7 @@ public class ConvertCsvOrXlsx {
         
         if(singletonFile == null) {
         
-            Calendar cal = Calendar.getInstance();
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-            List<String> recentDays = new ArrayList<>();
-            for(int x = 0; x < reportFileNameLookbackDays; x++) { cal.add(Calendar.DATE, -1); recentDays.add(sdf.format(cal.getTime())); }
+            List<String> recentDays = recentDaysListYYYYYMMDD(reportFileNameLookbackDays);
             // Epic_reports
             List<File> allFiles = new ArrayList<>();
             allFiles.addAll(Arrays.asList(epicReportDir.listFiles((File dir, String name) ->
@@ -174,14 +171,14 @@ public class ConvertCsvOrXlsx {
                 || name.matches("^LabSlidesOrderedTodayEUH_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.csv$"))));
             // Epic_missed_slide_report
             allFiles.addAll(Arrays.asList(epicMissedReportDir.listFiles((File dir, String name) ->
-                name.matches("^.*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.xlsx$"))));
+                name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.xlsx$"))));
             // sort in reverse order based on the timestamp in the file name
             allFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1")).reversed());
             // only select the latest "today" file and any files that have not been previously processed
             {
                 String lastDay = "99999999";
                 Pattern p1 = Pattern.compile("^LabSlidesOrderedTodayEUH_([0-9]{8})_[0-9]{4}(\\.[^\\.]*)?\\.csv$");
-                Pattern p2 = Pattern.compile("^.*_[0-9]{8}_[0-9]{4}(\\.[^\\.]*)?\\.(csv|xlsx)$");
+                Pattern p2 = Pattern.compile("^.[^\\.]*_[0-9]{8}_[0-9]{4}(\\.[^\\.]*)?\\.(csv|xlsx)$");
                 for(File file : allFiles) {
                     Matcher m1 = p1.matcher(file.getName());
                     if(m1.matches()) {
@@ -225,6 +222,7 @@ public class ConvertCsvOrXlsx {
 
                 out.println();
                 out.println(String.format("%s - running with these parameters", new Date(), InetAddress.getLocalHost().getHostName()));
+                out.println(String.format("    souce-code:             %s", "https://github.com/ghsmith/Epic2SectraV2"));
                 out.println(String.format("    host-name:              %s", InetAddress.getLocalHost().getHostName()));
                 out.println(String.format("    user-name:              %s", System.getProperty("user.name")));
                 out.println(String.format("    services:               %s", services));
@@ -293,10 +291,7 @@ public class ConvertCsvOrXlsx {
         if(singletonFile == null) {
             
             processedSlideMap = new HashMap<>();
-            Calendar cal = Calendar.getInstance();
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-            List<String> recentDays = new ArrayList<>();
-            for(int x = 0; x < processedFileNameLookbackDays; x++) { cal.add(Calendar.DATE, -1); recentDays.add(sdf.format(cal.getTime())); }
+            List<String> recentDays = recentDaysListYYYYYMMDD(processedFileNameLookbackDays);
             List<File> processedFiles = Arrays.asList(sectraProcessedDir.listFiles((File dir, String name) ->
                 name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\..*)?\\.csv$")));
             processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.(csv|xlsx)$", "$1")).reversed());
@@ -342,6 +337,7 @@ public class ConvertCsvOrXlsx {
         for(File file : filesToProcess) {
             
             File manifestFile = null;
+            int rowsProcessed = -1;
             
             try {
             
@@ -376,7 +372,6 @@ public class ConvertCsvOrXlsx {
                 Set<String> errorSet = new HashSet<>();
                 Set<String> filteredStainSet = new HashSet<>();
 
-                int rowsProcessed = 0;
                 int rowsSkipped = 0;
                 int rowsSkippedError = 0;
                 int rowsSkippedService = 0;
@@ -474,6 +469,8 @@ public class ConvertCsvOrXlsx {
 
                 manifestPrintStream.println(Slide.toManifestHeaderString());
                 
+                rowsProcessed = 0;
+
                 for(Slide slide : slides) {
 
                     if(!services.isEmpty()) {
@@ -549,7 +546,7 @@ public class ConvertCsvOrXlsx {
 
                     }
                     
-                    Path renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", "") + String.format(".SENT_TO_SECTRA_%03d.csv", rowsProcessed));
+                    Path renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", String.format(".SENT_TO_SECTRA_%03d.$1", rowsProcessed)));
                     Files.move(file.toPath(), renameTarget);
                     out.println();
                     out.println(String.format("%s - renamed Epic report to prevent future processing", new Date()));
@@ -568,15 +565,37 @@ public class ConvertCsvOrXlsx {
                     
             }
             catch(Exception e) {
+
                 // the idea of putting this exception handler in the
                 // filesToProcess loop is to try and process the next file
                 // if the current file breaks something - this might make things
                 // a little less brittle and mitigate the risk of one bad
                 // file shutting us down
+
                 try { manifestFile.delete(); } catch(Exception e1) { }
                 out.println();
                 out.println(String.format("%s - WARNING: Epic report not processed", new Date()));
                 out.println(String.format("    %s", e.getMessage()));
+
+                if(singletonFile == null) {
+
+                    if(!e.getMessage().contains("file not stable")) {
+                        // if the report is growing, it should be stable next time we try in a few minutes so we should not rename the file
+                        Path renameTarget;
+                        if(rowsProcessed == -1) {
+                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", ".REJECTED_FOR_SECTRA.$1"));
+                        }
+                        else {
+                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", String.format(".REJECTED_FOR_SECTRA_%03d.$1", rowsProcessed)));
+                        }
+                        Files.move(file.toPath(), renameTarget);
+                        out.println();
+                        out.println(String.format("%s - renamed Epic report to prevent future processing", new Date()));
+                        out.println(String.format("    %s", renameTarget.toFile().getPath()));
+                    }
+                    
+                }
+
             }
             
         }
@@ -585,6 +604,15 @@ public class ConvertCsvOrXlsx {
         
     }
 
+    private static List<String> recentDaysListYYYYYMMDD(int lookbackDays) {
+        Calendar cal = Calendar.getInstance();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
+        List<String> recentDays = new ArrayList<>();
+        recentDays.add(sdf.format(cal.getTime())); // don't forget to add today
+        for(int x = 0; x < lookbackDays; x++) { cal.add(Calendar.DATE, -1); recentDays.add(sdf.format(cal.getTime())); }
+        return recentDays;
+    }
+    
     private static String byteArrayToHex(byte[] a) {
        StringBuilder sb = new StringBuilder(a.length * 2);
        for(byte b: a)
