@@ -191,10 +191,10 @@ public class ConvertCsvOrXlsx {
                     Matcher m1 = p1.matcher(file.getName());
                     if(m1.matches()) {
                         if(!m1.group(1).equals(lastDay)) {
+                            lastDay = m1.group(1);
                             if(m1.group(2) == null) { // if this is not null, the file has been processed (e.g, LabSlidesOrderedTodayEUH_20230428_1150.SENT_TO_SECTRA_028.csv)
                                 filesToProcess.add(file);
                             }
-                            lastDay = m1.group(1);
                         }
                     }
                     else {
