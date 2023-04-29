@@ -188,5 +188,29 @@ public class Slide {
         ));
         
     }
+
+    public static Slide loadFromManifest(CSVRecord record) throws ParseException {
+
+        Slide slide = new Slide();
+
+        slide.slideBarCode = record.get("slideBarCode");
+        slide.service = record.get("service");
+        slide.accNo = record.get("accNo");
+        slide.partId = record.get("partId");
+        slide.blockId = record.get("blockId");
+        slide.slideNo = record.get("slideNo");
+        slide.stain = record.get("stain");
+        slide.mrn = record.get("mrn");
+        slide.empi = record.get("empi");
+        slide.dob = dfDayOut.parse(record.get("dob"));
+        slide.lastName = record.get("lastName");
+        slide.firstName = record.get("firstName");
+        slide.gender = record.get("gender");
+        slide.collectionDt = dfDayOut.parse(record.get("collectionDt"));
+        slide.orderDt = dfDayOut.parse(record.get("orderDt"));
+
+        return slide;
+
+    }
     
 }
