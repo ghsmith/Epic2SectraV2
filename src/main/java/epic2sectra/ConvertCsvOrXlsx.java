@@ -1,7 +1,9 @@
 package epic2sectra;
 
 import java.io.*;
+import java.net.InetAddress;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
@@ -39,7 +41,9 @@ public class ConvertCsvOrXlsx {
         
         PrintStream out = System.out;
 
+        // *********************************************************************
         // 1. Set configuration from command-line options and/or properties file.
+        // *********************************************************************
         {
 
             Options options = new Options();
@@ -77,22 +81,22 @@ public class ConvertCsvOrXlsx {
                     try(InputStream inputStream = new FileInputStream(propertiesFile)) {
                         Properties props = new Properties();
                         props.load(inputStream);
-                        if(props.get("services") != null && ((String)props.get("services")).length() > 0) {
+                        if(props.get("services") != null && (props.getProperty("services")).length() > 0) {
                             for(String service : props.getProperty("services").split(",")) { services.add(service.trim().toUpperCase()); }
                         }
-                        if(props.getProperty("log-file") != null && ((String)props.get("log-file")).length() > 0) { logFile = new File((String)props.get("log-file")); }
-                        if(props.getProperty("epic-report-dir") != null && ((String)props.get("epic-report-dir")).length() > 0) { epicReportDir = new File((String)props.get("epic-report-dir")); }
-                        if(props.getProperty("epic-missed-report-dir") != null && ((String)props.get("epic-missed-report-dir")).length() > 0) { epicMissedReportDir = new File((String)props.get("epic-missed-report-dir")); }
-                        if(props.getProperty("sectra-inbox-dir") != null && ((String)props.get("sectra-inbox-dir")).length() > 0) { sectraInboxDir = new File((String)props.get("sectra-inbox-dir")); }
-                        if(props.getProperty("sectra-processed-dir") != null && ((String)props.get("sectra-processed-dir")).length() > 0) { sectraProcessedDir = new File((String)props.get("sectra-processed-dir")); }
-                        if(props.getProperty("report-file-name-lookback-days") != null && ((String)props.get("report-file-name-lookback-days")).length() > 0) { reportFileNameLookbackDays = Integer.valueOf(props.getProperty("report-file-name-lookback-days")); }
-                        if(props.getProperty("processed-file-name-lookback-days") != null && ((String)props.get("processed-file-name-lookback-days")).length() > 0) { processedFileNameLookbackDays = Integer.valueOf(props.getProperty("processed-file-name-lookback-days")); }
+                        if(props.getProperty("log-file") != null && (props.getProperty("log-file")).length() > 0) { logFile = new File(props.getProperty("log-file")); }
+                        if(props.getProperty("epic-report-dir") != null && (props.getProperty("epic-report-dir")).length() > 0) { epicReportDir = new File(props.getProperty("epic-report-dir")); }
+                        if(props.getProperty("epic-missed-report-dir") != null && (props.getProperty("epic-missed-report-dir")).length() > 0) { epicMissedReportDir = new File(props.getProperty("epic-missed-report-dir")); }
+                        if(props.getProperty("sectra-inbox-dir") != null && (props.getProperty("sectra-inbox-dir")).length() > 0) { sectraInboxDir = new File(props.getProperty("sectra-inbox-dir")); }
+                        if(props.getProperty("sectra-processed-dir") != null && (props.getProperty("sectra-processed-dir")).length() > 0) { sectraProcessedDir = new File(props.getProperty("sectra-processed-dir")); }
+                        if(props.getProperty("report-file-name-lookback-days") != null && (props.getProperty("report-file-name-lookback-days")).length() > 0) { reportFileNameLookbackDays = Integer.valueOf(props.getProperty("report-file-name-lookback-days")); }
+                        if(props.getProperty("processed-file-name-lookback-days") != null && (props.getProperty("processed-file-name-lookback-days")).length() > 0) { processedFileNameLookbackDays = Integer.valueOf(props.getProperty("processed-file-name-lookback-days")); }
                         if(props.getProperty("no-unstained") != null) {
                             noUnstained = props.getProperty("no-unstained").length() > 0; // any value in no-unstained turns it on
                         }
-                        if(props.get("stain-regex") != null && ((String)props.get("stain-regex")).length() > 0) { stainRegex = props.getProperty("stain-regex"); }
-                        if(props.get("excel-password") != null && ((String)props.get("excel-password")).length() > 0) { excelPassword = props.getProperty("excel-password"); }
-                        if(props.get("excel-password-bypass") != null && ((String)props.get("excel-password-bypass")).length() > 0) { excelPasswordBypass = props.getProperty("excel-password-bypass"); }
+                        if(props.get("stain-regex") != null && (props.getProperty("stain-regex")).length() > 0) { stainRegex = props.getProperty("stain-regex"); }
+                        if(props.get("excel-password") != null && (props.getProperty("excel-password")).length() > 0) { excelPassword = props.getProperty("excel-password"); }
+                        if(props.get("excel-password-bypass") != null && (props.getProperty("excel-password-bypass")).length() > 0) { excelPasswordBypass = props.getProperty("excel-password-bypass"); }
 
                         out = new PrintStream(new FileOutputStream(logFile.toString(), true));
 
@@ -102,13 +106,6 @@ public class ConvertCsvOrXlsx {
                             System.exit(1);
                         }
 
-                        // inbox must be empty
-                        if(sectraInboxDir.listFiles((File dir, String name) -> name.matches("^.*\\.csv$")).length > 0) {
-                            out.println();
-                            out.println(String.format("%s - ERROR: Sectra inbox is not empty (%)", new Date(), sectraInboxDir.getPath()));
-                            System.exit(1);
-                        }
-                        
                     }
 
                 }
@@ -143,6 +140,7 @@ public class ConvertCsvOrXlsx {
             
         }
 
+        // *********************************************************************
         // 2. Load the filesToProcess list. The objective is to create a list of
         //    files that need to be processed ordered from most recent file to
         //    oldest, based on the yyyyMMdd_HHm timestamp that Epic puts in the
@@ -160,6 +158,7 @@ public class ConvertCsvOrXlsx {
         //    look back (e.g., if today is 4/28 and lookback days is 1, we'll
         //    look for Epic report filenames with 20230428 and 20230427 in the
         //    file name.
+        // *********************************************************************
         List<File> filesToProcess = new ArrayList<>();
         
         if(singletonFile == null) {
@@ -211,29 +210,84 @@ public class ConvertCsvOrXlsx {
             
         }
         
-        if(filesToProcess.isEmpty()) {
-            out.println();
-            out.println(String.format("%s - nothing to do", new Date()));
-            System.exit(0);
+        // *********************************************************************
+        // 3. Do some preliminary checks to make sure we should proceed.
+        // *********************************************************************
+        {
+        
+            if(filesToProcess.isEmpty()) {
+                out.println();
+                out.println(String.format("%s - nothing to do", new Date()));
+                System.exit(0);
+            }
+            
+            if(singletonFile == null) {
+
+                out.println();
+                out.println(String.format("%s - running with these parameters", new Date(), InetAddress.getLocalHost().getHostName()));
+                out.println(String.format("    host-name:              %s", InetAddress.getLocalHost().getHostName()));
+                out.println(String.format("    user-name:              %s", System.getProperty("user.name")));
+                out.println(String.format("    services:               %s", services));
+                out.println(String.format("    log-file:               %s", logFile.getPath()));
+                out.println(String.format("    epic-report-dir:        %s", epicReportDir.getPath()));
+                out.println(String.format("    epic-missed-report-dir: %s", epicMissedReportDir.getPath()));
+                out.println(String.format("    sectra-inbox-dir:       %s", sectraInboxDir.getPath()));
+                out.println(String.format("    sectra-processed-dir:   %s", sectraProcessedDir.getPath()));
+                out.println(String.format("    report-file-name-lookback-days:    %d", reportFileNameLookbackDays));
+                out.println(String.format("    processed-file-name-lookback-days: %d", processedFileNameLookbackDays));
+                out.println(String.format("    no-unstained:           %s", noUnstained));
+                out.println(String.format("    stain-regex:            %s", stainRegex));
+                out.println(String.format("    excel-password:         %s", excelPassword));
+                out.println(String.format("    excel-password-bypass:  %s", excelPasswordBypass));
+                
+                out.println();
+                out.println(String.format("%s - the following Epic reports are ready to be processed (in order)", new Date()));
+                if(singletonFile == null) {
+                    out.println("    NOTE: For the LabSlidesOrderedTodayEUH_yyyyMMdd_HHmm.csv reports, only the");
+                    out.println("          latest report for a day is a candidate for processing, since a later");
+                    out.println("          \"Today\" report contains all of the records from an earlier");
+                    out.println("          \"Today\" report on the same day. The report-file-name-lookback-days");
+                    out.println(String.format("          parameter (currently = %d) controls how far back the system looks for", reportFileNameLookbackDays));
+                    out.println("          files to process.");
+                }
+                for(File file : filesToProcess) {
+                    out.println(String.format("    %s", file.getPath()));
+                }
+
+                // inbox must be empty
+                if(sectraInboxDir.listFiles((File dir, String name) -> name.matches("^.*\\.csv$")).length > 0) {
+                    if(sectraInboxDir.getPath().equals(sectraProcessedDir.getPath())) {
+                        out.println();
+                        out.println(String.format("%s - WARNING: Sectra inbox is not empty", new Date()));
+                        out.println("    NOTE: The Sectra inbox and Sectra processed directories are the same,");
+                        out.println("          so you are probably testing something and the program will");
+                        out.println("          proceed. This is normally a hard stop, though.");
+                        out.println(String.format("    inbox    : %s", sectraInboxDir.getPath()));
+                        out.println(String.format("    processed: %s", sectraProcessedDir.getPath()));
+                    }
+                    else {
+                        out.println();
+                        out.println(String.format("%s - ERROR: Sectra inbox is not empty", new Date()));
+                        out.println(String.format("    %s", sectraInboxDir.getPath()));
+                        out.println("    CONTACT SECTRA IF THIS PERSISTS - THE INBOX IS NORMALLY CLEARED ALMOST IMMEDIATELY");
+                        for(File file : sectraInboxDir.listFiles((File dir, String name) -> name.matches("^.*\\.csv$"))) {
+                            out.println(String.format("    %s", file.getPath()));
+                        }
+                        System.exit(1);
+                    }
+                }
+                
+            }
+            
         }
         
-        out.println();
-        out.println(String.format("%s - the following Epic reports are ready to be processed (in order)", new Date()));
-        if(singletonFile == null) {
-            out.println("    NOTE: For the LabSlidesOrderedTodayEUH_yyyyMMdd_HHmm.csv reports, only the");
-            out.println("          latest report for a day is a candidate for processing, since a later");
-            out.println("          \"Today\" report contains all of the records from an earlier");
-            out.println("          \"Today\" report on the same day.");
-        }
-        for(File file : filesToProcess) {
-            out.println(String.format("    %s", file.getPath()));
-        }
-
-        // 3. Load processed manifests so we can avoid sending in slides that
+        // *********************************************************************
+        // 4. Load processed manifests so we can avoid sending in slides that
         //    we've already sent in. This won't be perfect and sending in a
         //    slide again doesn't have any real consequence, but we're trying
         //    to avoid doing it, anyway. If you are processing a singleton
         //    file on manual override, this is skipped.
+        // *********************************************************************
         Map<String, Slide> processedSlideMap = null;
 
         if(singletonFile == null) {
@@ -244,8 +298,8 @@ public class ConvertCsvOrXlsx {
             List<String> recentDays = new ArrayList<>();
             for(int x = 0; x < processedFileNameLookbackDays; x++) { cal.add(Calendar.DATE, -1); recentDays.add(sdf.format(cal.getTime())); }
             List<File> processedFiles = Arrays.asList(sectraProcessedDir.listFiles((File dir, String name) ->
-                name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.csv$")));
-            processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1")).reversed());
+                name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\..*)?\\.csv$")));
+            processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.(csv|xlsx)$", "$1")).reversed());
             for(File file : processedFiles) {
                 Reader reader = new BufferedReader(new FileReader(file));
                 Iterable<CSVRecord> records =
@@ -273,14 +327,18 @@ public class ConvertCsvOrXlsx {
             out.println(String.format("%s - loaded %d slides from %d previously processed manifests", new Date(), processedSlideMap.size(), processedFiles.size()));
             out.println("    NOTE: Slide bar codes appearing in these files will be filtered out of the");
             out.println("          current manifest. This avoids sending the same slide bar code to");
-            out.println("          Sectra multiple times. This is a form of deduplication.");
+            out.println("          Sectra multiple times. This is a form of deduplication. The");
+            out.println(String.format("          processed-file-name-lookback-days parameter (currently = %d)", processedFileNameLookbackDays));
+            out.println("          controls how far back the system looks for files to process.");
             for(File file : processedFiles) {
                 out.println(String.format("    %s", file.getPath()));
             }
             
         }
         
-        // 4. Convert from Epic report to Sectra manifest format.
+        // *********************************************************************
+        // 5. Convert from Epic report to Sectra manifest format.
+        // *********************************************************************
         for(File file : filesToProcess) {
             
             File manifestFile = null;
@@ -468,33 +526,35 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("          ...%5d skipped because stain matches regular expression %s", rowsSkippedStainRegex, filteredStainSet));
                 out.println(String.format("          ...%5d skipped because they appear in a processed manifest", rowsSkippedDuplicate));
 
-                if(rowsProcessed > 0) {
-
-                    out.println();
-                    out.println(String.format("%s - created manifest", new Date()));
-                    out.println(String.format("    %s", manifestFile.getPath()));
-
-                    if(singletonFile == null) {
+                if(singletonFile == null) {
                     
-                        Files.move(manifestFile.toPath(), Paths.get(sectraInboxDir.getPath() + "\\" + manifestFile.getName()));
+                    if(rowsProcessed > 0) {
 
+                        out.println();
+                        out.println(String.format("%s - created manifest", new Date()));
+                        out.println(String.format("    %s", manifestFile.getPath()));
+
+                        Path inboxTarget = Paths.get(sectraInboxDir.getPath() + "\\" + manifestFile.getName());
+                        Files.move(manifestFile.toPath(), inboxTarget);
                         out.println();
                         out.println(String.format("%s - moved manifest to Sectra inbox", new Date()));
-                        out.println(String.format("    %s", Paths.get(sectraInboxDir.getPath() + "\\" + manifestFile.getName()).toFile().getPath()));
+                        out.println(String.format("    %s", inboxTarget.toFile().getPath()));
 
-                        Files.move(file.toPath(), Paths.get(file.getParent() + "\\" + file.getName() + String.format(".SENT_TO_SECTRA_%3d.csv", rowsProcessed)));
+                    }
+                    else {
 
+                        manifestFile.delete();
                         out.println();
-                        out.println(String.format("%s - renamed Epic report", new Date()));
-                        out.println(String.format("    %s", Paths.get(file.getParent() + "\\" + file.getName() + String.format(".SENT_TO_SECTRA_%3d.csv", rowsProcessed)).toFile().getPath()));
+                        out.println(String.format("%s - no manifest created", new Date()));
 
-                    }                        
+                    }
                     
-                }
-                else {
+                    Path renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", "") + String.format(".SENT_TO_SECTRA_%03d.csv", rowsProcessed));
+                    Files.move(file.toPath(), renameTarget);
                     out.println();
-                    manifestFile.delete();
-                    out.println(String.format("%s - no manifest created", new Date()));
+                    out.println(String.format("%s - renamed Epic report to prevent future processing", new Date()));
+                    out.println(String.format("    %s", renameTarget.toFile().getPath()));
+
                 }
 
                  // if you remove this break, it will process more than one file
