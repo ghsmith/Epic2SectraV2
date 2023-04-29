@@ -53,7 +53,7 @@ public class ConvertCsvOrXlsx {
             optionServicesCsv.setType(String.class);
             options.addOption(optionServicesCsv);
 
-            Option optionNoUnstained = new Option("u", "no-unstained", false, "filter out unstained slides (stains that start with 'US...' or 'Unstained...')");
+            Option optionNoUnstained = new Option("u", "no-unstained", false, "filter out unstained slides (stains that start with \"US...\" or \"Unstained...\")");
             optionNoUnstained.setRequired(false);
             options.addOption(optionNoUnstained);
             
@@ -66,10 +66,18 @@ public class ConvertCsvOrXlsx {
             HelpFormatter formatter = new HelpFormatter();
             CommandLine cmd = null; // not a good practice
 
+            if(args.length == 0) {
+                System.out.println();
+                System.out.println("This program converts an Epic \"Lab Container\" template report to a Sectra manifest.");
+                System.out.println();
+                formatter.printHelp("java -jar epic2sectra.jar [options] {csv/xlsx-Epic-report-file-name} {xlsx-file-password}", options);
+                System.exit(0);
+            }
+            
             try {
             
                 cmd = parser.parse(options, args);
-
+                
                 if(cmd.hasOption(optionPropertiesFileName)) {
 
                     // This is used by the Windows scheduled task. All options
@@ -231,8 +239,8 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("    epic-missed-report-dir: %s", epicMissedReportDir.getPath()));
                 out.println(String.format("    sectra-inbox-dir:       %s", sectraInboxDir.getPath()));
                 out.println(String.format("    sectra-processed-dir:   %s", sectraProcessedDir.getPath()));
-                out.println(String.format("    report-file-name-lookback-days:    %d", reportFileNameLookbackDays));
-                out.println(String.format("    processed-file-name-lookback-days: %d", processedFileNameLookbackDays));
+                out.println(String.format("    report-file-name-lookback-days:    %d %s", reportFileNameLookbackDays, recentDaysListYYYYYMMDD(reportFileNameLookbackDays)));
+                out.println(String.format("    processed-file-name-lookback-days: %d %s", processedFileNameLookbackDays, recentDaysListYYYYYMMDD(processedFileNameLookbackDays)));
                 out.println(String.format("    no-unstained:           %s", noUnstained));
                 out.println(String.format("    stain-regex:            %s", stainRegex));
                 out.println(String.format("    excel-password:         %s", excelPassword));
@@ -249,7 +257,7 @@ public class ConvertCsvOrXlsx {
                     out.println("          files to process.");
                 }
                 for(File file : filesToProcess) {
-                    out.println(String.format("    %s", file.getPath()));
+                    out.println(String.format("    [%s] %s", file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1"), file.getPath()));
                 }
 
                 // inbox must be empty
@@ -294,8 +302,9 @@ public class ConvertCsvOrXlsx {
             List<String> recentDays = recentDaysListYYYYYMMDD(processedFileNameLookbackDays);
             List<File> processedFiles = Arrays.asList(sectraProcessedDir.listFiles((File dir, String name) ->
                 name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\..*)?\\.csv$")));
-            processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.(csv|xlsx)$", "$1")).reversed());
+            processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1")).reversed());
             for(File file : processedFiles) {
+                String fileNameTimestamp = file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1");
                 Reader reader = new BufferedReader(new FileReader(file));
                 Iterable<CSVRecord> records =
                     CSVFormat.DEFAULT.withFirstRecordAsHeader()
@@ -305,7 +314,8 @@ public class ConvertCsvOrXlsx {
                 for(CSVRecord record : records) {
                     try {
                         Slide slide = Slide.loadFromManifest(record);
-                        if(!processedSlideMap.containsKey(slide.slideBarCode)) {
+                        slide.fileNameTimestamp = fileNameTimestamp;
+                        if(!processedSlideMap.containsKey(slide.slideBarCode)) { // we're processing the files from latest to earliest, so we only take the latest record if the slide appears in multiple previously processed manifests
                             processedSlideMap.put(slide.slideBarCode, slide);
                         }
                     }
@@ -326,7 +336,7 @@ public class ConvertCsvOrXlsx {
             out.println(String.format("          processed-file-name-lookback-days parameter (currently = %d)", processedFileNameLookbackDays));
             out.println("          controls how far back the system looks for files to process.");
             for(File file : processedFiles) {
-                out.println(String.format("    %s", file.getPath()));
+                out.println(String.format("    [%s] %s", file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1"), file.getPath()));
             }
             
         }
@@ -336,6 +346,8 @@ public class ConvertCsvOrXlsx {
         // *********************************************************************
         for(File file : filesToProcess) {
             
+            String fileNameTimestamp = file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1");
+                    
             File manifestFile = null;
             int rowsProcessed = -1;
             
@@ -345,7 +357,7 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("%s - converting %s to Sectra manifest", new Date(), file.getName()));
             
                 // make sure the file is stable using byte counts and MD5 hashes
-                {
+                if(singletonFile == null) {
                     int[] byteCounts = new int[] { 0, 0 };
                     byte[][] md5Hashes = new byte[2][];
                     for(int x = 0; x < 2; x++) {
@@ -378,6 +390,7 @@ public class ConvertCsvOrXlsx {
                 int rowsSkippedUnstained = 0;
                 int rowsSkippedStainRegex = 0;
                 int rowsSkippedDuplicate = 0;
+                int rowsStainUpdateAllowed = 0;
 
                 List<Slide> slides = new ArrayList<>();
 
@@ -411,6 +424,7 @@ public class ConvertCsvOrXlsx {
                                 continue;
                             }
 
+                            slide.fileNameTimestamp = fileNameTimestamp;
                             slides.add(slide);
                             
                         }
@@ -458,6 +472,7 @@ public class ConvertCsvOrXlsx {
                             continue;
                         }
 
+                        slide.fileNameTimestamp = fileNameTimestamp;
                         slides.add(slide);
                         
                     }
@@ -500,9 +515,16 @@ public class ConvertCsvOrXlsx {
 
                     if(processedSlideMap != null) {
                         if(processedSlideMap.containsKey(slide.slideBarCode)) {
-                            rowsSkipped++;
-                            rowsSkippedDuplicate++;
-                            continue;
+                            // let stain updates go through
+                            Slide previousSlide = processedSlideMap.get(slide.slideBarCode);
+                            if(!slide.stain.equals(previousSlide.slideBarCode) && slide.fileNameTimestamp.compareTo(previousSlide.fileNameTimestamp) > 0) {
+                                rowsStainUpdateAllowed++;
+                            }
+                            else {
+                                rowsSkipped++;
+                                rowsSkippedDuplicate++;
+                                continue;
+                            }
                         }
                         processedSlideMap.put(slide.slideBarCode, slide);
                     }
@@ -518,10 +540,16 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("    %5d rows processed", rowsProcessed));
                 out.println(String.format("    %5d rows skipped", rowsSkipped));
                 out.println(String.format("          ...%5d skipped with errors %s", rowsSkippedError, errorSet));
-                out.println(String.format("          ...%5d skipped because they do not pass service filter", rowsSkippedService));
-                out.println(String.format("          ...%5d skipped because unstained", rowsSkippedUnstained));
-                out.println(String.format("          ...%5d skipped because stain matches regular expression %s", rowsSkippedStainRegex, filteredStainSet));
-                out.println(String.format("          ...%5d skipped because they appear in a processed manifest", rowsSkippedDuplicate));
+                out.println(String.format("          ...%5d skipped because they do not pass service filter (service filter is: %s)", rowsSkippedService, services));
+                out.println(String.format("          ...%5d skipped because unstained (unstained exclusion is: %s)", rowsSkippedUnstained, noUnstained ? "TURNED ON" : "TURNED OFF"));
+                if(singletonFile ==  null) {
+                    out.println(String.format("          ...%5d skipped because stain matches regular expression %s", rowsSkippedStainRegex, filteredStainSet));
+                    out.println(String.format("          ...%5d skipped because they appear in a processed manifest (%d stain updates were allowed)", rowsSkippedDuplicate, rowsStainUpdateAllowed));
+                }
+                else {
+                    out.println("          ... stain regular expression filtering is DISABLED when running manually");
+                    out.println("          ... duplicate checking in previous manifests is DISABLED when running manually");
+                }
 
                 if(singletonFile == null) {
                     
@@ -576,6 +604,7 @@ public class ConvertCsvOrXlsx {
                 out.println();
                 out.println(String.format("%s - WARNING: Epic report not processed", new Date()));
                 out.println(String.format("    %s", e.getMessage()));
+                if(e.getMessage() == null || e.getMessage().length() == 0) { e.printStackTrace(out); }
 
                 if(singletonFile == null) {
 

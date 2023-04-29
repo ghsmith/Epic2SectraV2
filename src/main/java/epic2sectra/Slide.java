@@ -40,6 +40,8 @@ public class Slide {
     public Date collectionDt;
     public Date orderDt;
     
+    public String fileNameTimestamp;
+    
     public static Slide load(CSVRecord record, List<String> errorList) {
 
         // getting bar code by index (0) because Epic uses "Container" twice
