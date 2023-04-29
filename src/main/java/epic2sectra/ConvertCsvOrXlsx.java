@@ -350,6 +350,7 @@ public class ConvertCsvOrXlsx {
                     
             File manifestFile = null;
             int rowsProcessed = -1;
+            int rowsProcessedMaxAllowed = 300; // we would never do this many GI biopsy slides in a day
             
             try {
             
@@ -441,12 +442,8 @@ public class ConvertCsvOrXlsx {
                     
                     WorkbookFactory.addProvider(new XSSFWorkbookFactory());
                     Workbook workbook;
-                    if(excelPassword != null) {
-                        workbook = WorkbookFactory.create(file, excelPassword);
-                    }
-                    else {
-                        workbook = WorkbookFactory.create(file);
-                    }
+                    try                { workbook = WorkbookFactory.create(file, excelPassword);       rowsProcessedMaxAllowed = 50; }
+                    catch(Exception e) { workbook = WorkbookFactory.create(file, excelPasswordBypass);                               } // this one bypasses the lower safety threshold
                     Sheet sheet = workbook.getSheetAt(0);
 
                     Iterator<Row> rowIterator = sheet.iterator();
@@ -526,7 +523,6 @@ public class ConvertCsvOrXlsx {
                                 continue;
                             }
                         }
-                        processedSlideMap.put(slide.slideBarCode, slide);
                     }
 
                     rowsProcessed++;
@@ -552,18 +548,23 @@ public class ConvertCsvOrXlsx {
                 }
 
                 if(singletonFile == null) {
-                    
+
                     if(rowsProcessed > 0) {
 
                         out.println();
                         out.println(String.format("%s - created manifest", new Date()));
                         out.println(String.format("    %s", manifestFile.getPath()));
 
-                        Path inboxTarget = Paths.get(sectraInboxDir.getPath() + "\\" + manifestFile.getName());
-                        Files.move(manifestFile.toPath(), inboxTarget);
-                        out.println();
-                        out.println(String.format("%s - moved manifest to Sectra inbox", new Date()));
-                        out.println(String.format("    %s", inboxTarget.toFile().getPath()));
+                        if(rowsProcessed <= rowsProcessedMaxAllowed) {
+                            Path inboxTarget = Paths.get(sectraInboxDir.getPath() + "\\" + manifestFile.getName());
+                            Files.move(manifestFile.toPath(), inboxTarget);
+                            out.println();
+                            out.println(String.format("%s - moved manifest to Sectra inbox", new Date()));
+                            out.println(String.format("    %s", inboxTarget.toFile().getPath()));
+                        }
+                        else {
+                            throw new Exception(String.format("manifest too large (the limit is %d slides in one manifest)", rowsProcessedMaxAllowed));
+                        }
 
                     }
                     else {
@@ -600,7 +601,7 @@ public class ConvertCsvOrXlsx {
                 // a little less brittle and mitigate the risk of one bad
                 // file shutting us down
 
-                try { manifestFile.delete(); } catch(Exception e1) { }
+                //try { manifestFile.delete(); } catch(Exception e1) { }
                 out.println();
                 out.println(String.format("%s - WARNING: Epic report not processed", new Date()));
                 out.println(String.format("    %s", e.getMessage()));
@@ -612,10 +613,10 @@ public class ConvertCsvOrXlsx {
                         // if the report is growing, it should be stable next time we try in a few minutes so we should not rename the file
                         Path renameTarget;
                         if(rowsProcessed == -1) {
-                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", ".REJECTED_FOR_SECTRA.$1"));
+                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", ".REJECTED.$1"));
                         }
                         else {
-                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", String.format(".REJECTED_FOR_SECTRA_%03d.$1", rowsProcessed)));
+                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", String.format(".REJECTED_%03d.$1", rowsProcessed)));
                         }
                         Files.move(file.toPath(), renameTarget);
                         out.println();
