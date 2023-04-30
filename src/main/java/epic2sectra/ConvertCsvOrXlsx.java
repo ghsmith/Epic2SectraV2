@@ -71,17 +71,11 @@ public class ConvertCsvOrXlsx {
             HelpFormatter formatter = new HelpFormatter();
             CommandLine cmd = null; // not a good practice
 
-            if(args.length == 0) {
-                System.out.println();
-                System.out.println("This program converts an Epic \"Lab Container\" template report to a Sectra manifest.");
-                System.out.println();
-                formatter.printHelp("java -jar epic2sectra.jar [options] {csv/xlsx-Epic-report-file-name} {xlsx-file-password}", options);
-                System.exit(0);
-            }
-            
             try {
             
                 cmd = parser.parse(options, args);
+
+                if(args.length == 0) { throw new org.apache.commons.cli.ParseException(""); }
                 
                 if(cmd.hasOption(optionPropertiesFileName)) {
 
@@ -149,7 +143,10 @@ public class ConvertCsvOrXlsx {
             }
             catch (org.apache.commons.cli.ParseException e) {
                 out.println(e.getMessage());
-                formatter.printHelp("java -jar epic2sectra.jar ConvertCsv2 [options] {CSV-file-name}", options);
+                System.out.println();
+                System.out.println("This program converts an Epic \"Lab Container\" template report to a Sectra manifest.");
+                System.out.println();
+                formatter.printHelp("java -jar epic2sectra.jar [options] {csv/xlsx-Epic-report-file-name} {xlsx-file-password}", options);
                 System.exit(1);
             }
             
@@ -547,10 +544,12 @@ public class ConvertCsvOrXlsx {
 
                 out.println(String.format("    %5d rows processed", rowsProcessed));
                 out.println(String.format("    %5d rows skipped", rowsSkipped));
-                out.println(String.format("          ...%5d skipped with errors %s", rowsSkippedError, errorSet));
-                out.println(String.format("          ...%5d skipped because they do not match a service filter (service selection is: %s)", rowsSkippedService, services));
+                out.println(String.format("          ...%5d skipped with errors", rowsSkippedError));
+                for(String error : errorSet) { out.println(String.format("                   %s", error)); }
+                out.println(String.format("          ...%5d skipped because they do not match a service filter (service selection is: %s)", rowsSkippedService, !services.isEmpty() ? "TURNED ON" : "TURNED OFF"));
                 out.println(String.format("          ...%5d skipped because unstained (unstained exclusion is: %s)", rowsSkippedUnstained, noUnstained ? "TURNED ON" : "TURNED OFF"));
-                out.println(String.format("          ...%5d skipped because stain matches regular expression (stain filtering is: %s) %s", rowsSkippedStainRegex, filteredStainSet, stainRegex != null ? "TURNED ON" : "TURNED OFF"));
+                out.println(String.format("          ...%5d skipped because stain matches regular expression (stain filtering is: %s)", rowsSkippedStainRegex, stainRegex != null ? "TURNED ON" : "TURNED OFF"));
+                for(String filteredStain : filteredStainSet) { out.println(String.format("                   %s", filteredStain)); }
                 if(singletonFile ==  null) {
                     out.println(String.format("          ...%5d skipped because they appear in a processed manifest (%d stain updates were allowed)", rowsSkippedDuplicate, rowsStainUpdateAllowed));
                 }
