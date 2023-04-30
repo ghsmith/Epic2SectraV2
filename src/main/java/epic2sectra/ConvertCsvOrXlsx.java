@@ -620,7 +620,7 @@ public class ConvertCsvOrXlsx {
                 if(singletonFile == null) {
 
                     // if the report is growing, it should be stable next time we try in a few minutes so we should not rename the file
-                    if(!e.getMessage().contains("file not stable")) {
+                    if(e.getMessage() == null || !e.getMessage().contains("file not stable")) {
                         Path renameTarget;
                         if(rowsProcessed == -1) {
                             renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("(?i)\\.(csv|xlsx)$", ".REJECTED.$1"));
