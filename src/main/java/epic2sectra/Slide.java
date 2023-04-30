@@ -11,7 +11,7 @@ import org.apache.poi.ss.usermodel.Row;
 
 /**
  *
- * @author geoff
+ * @author Geoff
  */
 public class Slide {
 
