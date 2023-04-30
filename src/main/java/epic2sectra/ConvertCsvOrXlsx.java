@@ -264,11 +264,11 @@ public class ConvertCsvOrXlsx {
                     out.println("          files to process.");
                 }
                 for(File file : filesToProcess) {
-                    out.println(String.format("    [%s] %s", file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1"), file.getPath()));
+                    out.println(String.format("    [%s] %s", file.getName().replaceAll("(?i)^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1"), file.getPath()));
                 }
 
                 // inbox must be empty
-                if(sectraInboxDir.listFiles((File dir, String name) -> name.matches("^.*\\.csv$")).length > 0) {
+                if(sectraInboxDir.listFiles((File dir, String name) -> name.matches("(?i)^.*\\.csv$")).length > 0) {
                     if(sectraInboxDir.getPath().equals(sectraProcessedDir.getPath())) {
                         out.println();
                         out.println(String.format("%s - WARNING: Sectra inbox is not empty", new Date()));
@@ -283,7 +283,7 @@ public class ConvertCsvOrXlsx {
                         out.println(String.format("%s - ERROR: Sectra inbox is not empty", new Date()));
                         out.println(String.format("    %s", sectraInboxDir.getPath()));
                         out.println("    CONTACT SECTRA IF THIS PERSISTS - THE INBOX IS NORMALLY CLEARED ALMOST IMMEDIATELY");
-                        for(File file : sectraInboxDir.listFiles((File dir, String name) -> name.matches("^.*\\.csv$"))) {
+                        for(File file : sectraInboxDir.listFiles((File dir, String name) -> name.matches("(?i)^.*\\.csv$"))) {
                             out.println(String.format("    %s", file.getPath()));
                         }
                         System.exit(1);
@@ -343,7 +343,7 @@ public class ConvertCsvOrXlsx {
             out.println(String.format("          processed-file-name-lookback-days parameter (currently = %d)", processedFileNameLookbackDays));
             out.println("          controls how far back the system looks for files to process.");
             for(File file : processedFiles) {
-                out.println(String.format("    [%s] %s", file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1"), file.getPath()));
+                out.println(String.format("    [%s] %s", file.getName().replaceAll("(?i)^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1"), file.getPath()));
             }
             
         }
@@ -353,7 +353,7 @@ public class ConvertCsvOrXlsx {
         // *********************************************************************
         for(File file : filesToProcess) {
             
-            String fileNameTimestamp = file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1");
+            String fileNameTimestamp = file.getName().replaceAll("(?i)^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1");
                     
             File manifestFile = null;
             int rowsProcessed = -1;
