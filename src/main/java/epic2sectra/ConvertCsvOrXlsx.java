@@ -57,6 +57,11 @@ public class ConvertCsvOrXlsx {
             optionNoUnstained.setRequired(false);
             options.addOption(optionNoUnstained);
             
+            Option optionStainRegex = new Option("x", "stain-regex", true, String.format("if a stain matches this regular expression, then the slide is filtered out", stainRegex));
+            optionStainRegex.setRequired(false);
+            optionStainRegex.setType(String.class);
+            options.addOption(optionStainRegex);
+            
             Option optionPropertiesFileName = new Option("z", "properties-file", true, "read options from a properties file");
             optionPropertiesFileName.setRequired(false);
             optionPropertiesFileName.setType(String.class);
@@ -134,6 +139,8 @@ public class ConvertCsvOrXlsx {
 
                     noUnstained = cmd.hasOption(optionNoUnstained);
 
+                    if(cmd.hasOption(optionStainRegex)) { stainRegex = cmd.getOptionValue(optionStainRegex); }
+
                     singletonFile = new File(cmd.getArgs()[0]);
                     if(cmd.getArgs().length > 1) { excelPassword = cmd.getArgs()[1]; } // if processing a CSV, you don't need an Excel password
 
@@ -175,18 +182,18 @@ public class ConvertCsvOrXlsx {
             // Epic_reports
             List<File> allFiles = new ArrayList<>();
             allFiles.addAll(Arrays.asList(epicReportDir.listFiles((File dir, String name) ->
-                name.matches("^LabSlidesOrderedPriorDayEUH_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.csv$")
-                || name.matches("^LabSlidesOrderedTodayEUH_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.csv$"))));
+                name.matches("(?i)^LabSlidesOrderedPriorDayEUH_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.csv$")
+                || name.matches("(?i)^LabSlidesOrderedTodayEUH_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.csv$"))));
             // Epic_missed_slide_report
             allFiles.addAll(Arrays.asList(epicMissedReportDir.listFiles((File dir, String name) ->
-                name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.xlsx$"))));
+                name.matches("(?i)^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\.[^\\.]*)?\\.xlsx$"))));
             // sort in reverse order based on the timestamp in the file name
-            allFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1")).reversed());
+            allFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("(?i)^[^\\.]*_([0-9]{8}_[0-9]{4})(\\.[^\\.]*)?\\.(csv|xlsx)$", "$1")).reversed());
             // only select the latest "today" file and any files that have not been previously processed
             {
                 String lastDay = "99999999";
-                Pattern p1 = Pattern.compile("^LabSlidesOrderedTodayEUH_([0-9]{8})_[0-9]{4}(\\.[^\\.]*)?\\.csv$");
-                Pattern p2 = Pattern.compile("^.[^\\.]*_[0-9]{8}_[0-9]{4}(\\.[^\\.]*)?\\.(csv|xlsx)$");
+                Pattern p1 = Pattern.compile("(?i)^LabSlidesOrderedTodayEUH_([0-9]{8})_[0-9]{4}(\\.[^\\.]*)?\\.csv$");
+                Pattern p2 = Pattern.compile("(?i)^.[^\\.]*_[0-9]{8}_[0-9]{4}(\\.[^\\.]*)?\\.(csv|xlsx)$");
                 for(File file : allFiles) {
                     Matcher m1 = p1.matcher(file.getName());
                     if(m1.matches()) {
@@ -243,8 +250,8 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("    processed-file-name-lookback-days: %d %s", processedFileNameLookbackDays, recentDaysListYYYYYMMDD(processedFileNameLookbackDays)));
                 out.println(String.format("    no-unstained:           %s", noUnstained));
                 out.println(String.format("    stain-regex:            %s", stainRegex));
-                out.println(String.format("    excel-password:         %s", excelPassword));
-                out.println(String.format("    excel-password-bypass:  %s", excelPasswordBypass));
+                //out.println(String.format("    excel-password:         %s", excelPassword));
+                //out.println(String.format("    excel-password-bypass:  %s", excelPasswordBypass));
                 
                 out.println();
                 out.println(String.format("%s - the following Epic reports are ready to be processed (in order)", new Date()));
@@ -301,10 +308,10 @@ public class ConvertCsvOrXlsx {
             processedSlideMap = new HashMap<>();
             List<String> recentDays = recentDaysListYYYYYMMDD(processedFileNameLookbackDays);
             List<File> processedFiles = Arrays.asList(sectraProcessedDir.listFiles((File dir, String name) ->
-                name.matches("^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\..*)?\\.csv$")));
-            processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1")).reversed());
+                name.matches("(?i)^[^\\.]*_(" + String.join("|", recentDays) + ")_[0-9]{4}(\\..*)?\\.csv$")));
+            processedFiles.sort(Comparator.comparing(f -> ((File)f).getName().replaceAll("(?i)^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1")).reversed());
             for(File file : processedFiles) {
-                String fileNameTimestamp = file.getName().replaceAll("^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1");
+                String fileNameTimestamp = file.getName().replaceAll("(?i)^[^\\.]*_([0-9]{8}_[0-9]{4})(\\..*)?\\.csv$", "$1");
                 Reader reader = new BufferedReader(new FileReader(file));
                 Iterable<CSVRecord> records =
                     CSVFormat.DEFAULT.withFirstRecordAsHeader()
@@ -350,7 +357,7 @@ public class ConvertCsvOrXlsx {
                     
             File manifestFile = null;
             int rowsProcessed = -1;
-            int rowsProcessedMaxAllowed = 300; // we would never do this many GI biopsy slides in a day
+            int rowsProcessedMaxAllowed = 300; // we would not do this many GI biopsy slides in a day
             
             try {
             
@@ -395,7 +402,7 @@ public class ConvertCsvOrXlsx {
 
                 List<Slide> slides = new ArrayList<>();
 
-                if(file.getName().endsWith(".csv")) {
+                if(file.getName().toLowerCase().endsWith(".csv")) {
 
                     // *********************************************************
                     // Epic rw_extract (i.e., the scheduled job) generates files
@@ -433,7 +440,7 @@ public class ConvertCsvOrXlsx {
                     }
                         
                 }
-                else if(file.getName().endsWith(".xlsx")) {
+                else if(file.getName().toLowerCase().endsWith(".xlsx")) {
 
                     // *********************************************************
                     // Reports run im Epic interactively use the XLSX format
@@ -442,8 +449,13 @@ public class ConvertCsvOrXlsx {
                     
                     WorkbookFactory.addProvider(new XSSFWorkbookFactory());
                     Workbook workbook;
-                    try                { workbook = WorkbookFactory.create(file, excelPassword);       rowsProcessedMaxAllowed = 50; }
-                    catch(Exception e) { workbook = WorkbookFactory.create(file, excelPasswordBypass);                               } // this one bypasses the lower safety threshold
+                    try {
+                        workbook = WorkbookFactory.create(file, excelPassword);
+                        rowsProcessedMaxAllowed = 50;
+                    }
+                    catch(Exception e) {
+                        workbook = WorkbookFactory.create(file, excelPasswordBypass);
+                    }
                     Sheet sheet = workbook.getSheetAt(0);
 
                     Iterator<Row> rowIterator = sheet.iterator();
@@ -536,14 +548,13 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("    %5d rows processed", rowsProcessed));
                 out.println(String.format("    %5d rows skipped", rowsSkipped));
                 out.println(String.format("          ...%5d skipped with errors %s", rowsSkippedError, errorSet));
-                out.println(String.format("          ...%5d skipped because they do not pass service filter (service filter is: %s)", rowsSkippedService, services));
+                out.println(String.format("          ...%5d skipped because they do not match a service filter (service selection is: %s)", rowsSkippedService, services));
                 out.println(String.format("          ...%5d skipped because unstained (unstained exclusion is: %s)", rowsSkippedUnstained, noUnstained ? "TURNED ON" : "TURNED OFF"));
+                out.println(String.format("          ...%5d skipped because stain matches regular expression (stain filtering is: %s) %s", rowsSkippedStainRegex, filteredStainSet, stainRegex != null ? "TURNED ON" : "TURNED OFF"));
                 if(singletonFile ==  null) {
-                    out.println(String.format("          ...%5d skipped because stain matches regular expression %s", rowsSkippedStainRegex, filteredStainSet));
                     out.println(String.format("          ...%5d skipped because they appear in a processed manifest (%d stain updates were allowed)", rowsSkippedDuplicate, rowsStainUpdateAllowed));
                 }
                 else {
-                    out.println("          ... stain regular expression filtering is DISABLED when running manually");
                     out.println("          ... duplicate checking in previous manifests is DISABLED when running manually");
                 }
 
@@ -575,7 +586,7 @@ public class ConvertCsvOrXlsx {
 
                     }
                     
-                    Path renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", String.format(".SENT_TO_SECTRA_%03d.$1", rowsProcessed)));
+                    Path renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("(?i)\\.(csv|xlsx)$", String.format(".SENT_TO_SECTRA_%03d.$1", rowsProcessed)));
                     Files.move(file.toPath(), renameTarget);
                     out.println();
                     out.println(String.format("%s - renamed Epic report to prevent future processing", new Date()));
@@ -609,14 +620,14 @@ public class ConvertCsvOrXlsx {
 
                 if(singletonFile == null) {
 
+                    // if the report is growing, it should be stable next time we try in a few minutes so we should not rename the file
                     if(!e.getMessage().contains("file not stable")) {
-                        // if the report is growing, it should be stable next time we try in a few minutes so we should not rename the file
                         Path renameTarget;
                         if(rowsProcessed == -1) {
-                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", ".REJECTED.$1"));
+                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("(?i)\\.(csv|xlsx)$", ".REJECTED.$1"));
                         }
                         else {
-                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("\\.(csv|xlsx)$", String.format(".REJECTED_%03d.$1", rowsProcessed)));
+                            renameTarget = Paths.get(file.getParent() + "\\" + file.getName().replaceAll("(?i)\\.(csv|xlsx)$", String.format(".REJECTED_%03d.$1", rowsProcessed)));
                         }
                         Files.move(file.toPath(), renameTarget);
                         out.println();
