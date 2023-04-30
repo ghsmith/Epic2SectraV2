@@ -229,6 +229,11 @@ public class ConvertCsvOrXlsx {
                 out.println(String.format("%s - nothing to do", new Date()));
                 System.exit(0);
             }
+
+            // cap the list at 5 files
+            if(filesToProcess.size() > 5) {
+                filesToProcess = filesToProcess.subList(0, 5);
+            }
             
             if(singletonFile == null) {
 
