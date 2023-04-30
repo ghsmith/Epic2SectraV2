@@ -526,7 +526,7 @@ public class ConvertCsvOrXlsx {
                         if(processedSlideMap.containsKey(slide.slideBarCode)) {
                             // let stain updates go through
                             Slide previousSlide = processedSlideMap.get(slide.slideBarCode);
-                            if(!slide.stain.equals(previousSlide.stain) && slide.fileNameTimestamp.compareTo(previousSlide.fileNameTimestamp) > 0) {
+                            if(!slide.stain.equals(previousSlide.stain) && slide.fileNameTimestamp.compareTo(previousSlide.fileNameTimestamp) >= 0) {
                                 rowsStainUpdateAllowed++;
                             }
                             else {
