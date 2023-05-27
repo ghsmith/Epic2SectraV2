@@ -182,8 +182,8 @@ public class Slide {
             mrn,
             empi,
             dfDayOut.format(dob),
-            lastName,
-            firstName,
+            lastName != null ? lastName.replace("\"", " ") : lastName,
+            firstName != null ? firstName.replace("\"", " ") : firstName,
             gender,
             dfTimestampOut.format(collectionDt),
             dfTimestampOut.format(orderDt)
